@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="WORDS">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#f7f7f8">
+<title>WORDS</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header id="topbar">
+  <div class="tb-l"><span id="title">단어</span></div>
+  <div class="tb-r" id="tb-actions"></div>
+</header>
+
+<main id="app"></main>
+
+<nav id="tabbar"></nav>
+
+<div id="sheet-root"></div>
+<div id="toast-root"></div>
+
+<script src="store.js"></script>
+<script src="ui.js"></script>
+<script src="sync.js"></script>
+<script src="app.js"></script>
+<script src="view-words.js"></script>
+<script src="view-study.js"></script>
+<script src="view-decks.js"></script>
+<script src="view-settings.js"></script>
+<script>App.start();</script>
+</body>
+</html>
