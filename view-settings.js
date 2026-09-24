@@ -6,16 +6,24 @@
     id: 'set', name: '설정',
     render(root) {
       const c = Sync.cfg(), e = UI.esc;
+      const state = c.err ? `<div class="tiny" style="color:#a97b7b;line-height:1.6">⚠ ${e(c.err)}</div>`
+        : (c.gistId ? `<div class="tiny">연결됨 · 마지막 동기화 ${fmt(c.at)}</div>`
+          : `<div class="tiny">아직 연결되지 않음</div>`);
+
       root.innerHTML =
         `<div class="sec">GITHUB GIST 동기화</div>
-        <div class="fld"><label>토큰 <span class="tiny">(gist 권한만)</span></label>
-          <input data-f="token" type="password" value="${e(c.token || '')}" placeholder="ghp_..." autocapitalize="off" spellcheck="false"></div>
-        <div class="fld"><label>Gist ID <span class="tiny">(비우면 새로 생성)</span></label>
-          <input data-f="gistId" value="${e(c.gistId || '')}" placeholder="자동 생성" autocapitalize="off" spellcheck="false"></div>
-        <button class="btn full" data-a="save" style="margin-bottom:7px">저장</button>
+        <div class="fld"><label>토큰 <span class="tiny">classic · gist 스코프</span></label>
+          <input data-f="token" type="text" value="${e(c.token || '')}" placeholder="ghp_..."
+            autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off"
+            style="font-family:ui-monospace,Menlo,monospace;font-size:11px"></div>
+        <div class="fld"><label>Gist ID <span class="tiny">첫 기기는 비워둘 것</span></label>
+          <input data-f="gistId" value="${e(c.gistId || '')}" placeholder="비우면 자동 생성"
+            autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off"
+            style="font-family:ui-monospace,Menlo,monospace;font-size:11px"></div>
+        <button class="btn full" data-a="test" style="margin-bottom:7px">연결 테스트</button>
         <button class="btn full" data-a="sync" style="margin-bottom:7px">지금 동기화 (병합 후 업로드)</button>
-        <button class="btn full dim" data-a="pull">서버 데이터 가져오기</button>
-        <div class="tiny" style="margin-top:7px">마지막 동기화 · ${fmt(c.at)}</div>
+        <button class="btn full dim" data-a="pull" style="margin-bottom:7px">서버 데이터만 가져오기</button>
+        ${state}
 
         <div class="sec">백업</div>
         <button class="btn full" data-a="export" style="margin-bottom:7px">JSON 내보내기</button>
@@ -24,16 +32,24 @@
         <div data-snaps></div>
 
         <div class="sec">데이터</div>
+        <div class="tiny" style="margin-bottom:7px">단어 ${Store.allWords().length}개 · 덱 ${Store.decks().length}개</div>
         <button class="btn full warn" data-a="reset">전체 초기화</button>
         <div class="tiny" style="margin-top:16px;line-height:1.7">
-          단어·덱은 기기에 즉시 자동 저장됩니다.<br>
-          기능을 추가·수정해도 저장된 기록은 그대로 유지됩니다.
+          입력 즉시 기기에 저장되고, 연결된 경우 잠시 후 자동 업로드됩니다.<br>
+          앱을 다시 열거나 화면으로 돌아올 때 서버 변경분을 자동으로 가져옵니다.
         </div>`;
 
       const snaps = Store.snapKeys();
       root.querySelector('[data-snaps]').innerHTML = snaps.length
         ? snaps.map(k => `<button class="btn full dim" data-snap="${k}" style="margin-bottom:5px">${k.replace('vocab.snap.', '')} 복원</button>`).join('')
         : `<div class="tiny">아직 없음</div>`;
+
+      const saveInputs = () => {
+        Sync.setCfg({
+          token: Sync.cleanToken(root.querySelector('[data-f="token"]').value),
+          gistId: Sync.cleanId(root.querySelector('[data-f="gistId"]').value)
+        });
+      };
 
       root.onclick = async ev => {
         const s = ev.target.closest('[data-snap]');
@@ -43,22 +59,26 @@
           } return;
         }
         const b = ev.target.closest('[data-a]'); if (!b) return;
-        const a = b.dataset.a;
-        const val = f => root.querySelector(`[data-f="${f}"]`).value.trim();
+        const a = b.dataset.a, label = b.textContent;
 
-        if (a === 'save') { Sync.setCfg({ token: val('token'), gistId: val('gistId') }); UI.toast('저장됨'); App.refresh(); }
-
-        if (a === 'sync' || a === 'pull') {
-          Sync.setCfg({ token: val('token'), gistId: val('gistId') });
-          b.textContent = '동기화 중…';
+        if (a === 'test' || a === 'sync' || a === 'pull') {
+          saveInputs();
+          b.textContent = '처리 중…';
           try {
-            if (a === 'pull') {
+            if (a === 'test') { UI.toast(await Sync.test(), 2600); Sync.setCfg({ err: '' }); }
+            else if (a === 'pull') {
               const r = await Sync.pull();
-              if (!r) throw new Error('가져올 데이터가 없습니다');
-              Store.merge(r); UI.toast('가져오기 완료');
+              if (!r) throw new Error('Gist ID를 입력하거나 먼저 동기화하세요');
+              UI.toast(Store.merge(r) + '건 반영됨');
+              Sync.setCfg({ at: Date.now(), err: '' });
             } else { await Sync.run(); UI.toast('동기화 완료'); }
-          } catch (err) { UI.toast(err.message || '실패'); }
+          } catch (err) {
+            Sync.setCfg({ err: err.message || String(err) });
+            UI.toast(err.message || '실패', 3200);
+          }
+          b.textContent = label;
           App.refresh();
+          return;
         }
 
         if (a === 'export') {
@@ -74,7 +94,7 @@
             const f = inp.files[0]; if (!f) return;
             const rd = new FileReader();
             rd.onload = () => {
-              try { Store.merge(JSON.parse(rd.result)); UI.toast('병합 완료'); App.refresh(); }
+              try { UI.toast(Store.merge(JSON.parse(rd.result)) + '건 병합됨'); App.refresh(); }
               catch (err) { UI.toast('파일을 읽을 수 없습니다'); }
             };
             rd.readAsText(f);
@@ -83,7 +103,7 @@
         }
 
         if (a === 'reset') {
-          if (await UI.confirm('모든 단어와 덱이 삭제됩니다.', '초기화')) {
+          if (await UI.confirm('이 기기의 모든 단어와 덱이 삭제됩니다.', '초기화')) {
             localStorage.removeItem('vocab.data'); location.reload();
           }
         }

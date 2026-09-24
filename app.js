@@ -42,6 +42,7 @@ const App = (() => {
     cur = localStorage.getItem('vocab.tab');
     if (!byId[cur]) cur = views[0].id;
     paint(true);
+    if (window.Sync) { Sync.watch(); Sync.boot(true); }
   }
 
   return { register, go, refresh, start, get current() { return cur; } };
