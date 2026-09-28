@@ -3,7 +3,6 @@
   const POS = ['', 'n.', 'v.', 'a.', 'ad.', 'prep.', 'conj.', 'phr.'];
   const IMP = ['', '★', '★★', '★★★'];
   const ST = ['X', '?', 'O'];
-  let seed = 0; // 랜덤 정렬 고정용
 
   const dcolor = id => (Store.deck(id) || {}).color || 'var(--tx3)';
 
@@ -19,7 +18,8 @@
       `<div class="fld"><label>덱</label>
         <select data-f="deckId">${decks.map(d => `<option value="${d.id}" ${d.id === w.deckId ? 'selected' : ''}>${e(d.name)}</option>`).join('')}</select></div>
       <div class="fld"><label>영단어</label>
-        <input data-f="en" value="${e(w.en)}" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="word"></div>
+        <input data-f="en" value="${e(w.en)}" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="word">
+        <div class="dup" data-dup hidden></div></div>
       <div class="g2">
         <div class="fld"><label>품사</label>
           <select data-f="pos">${POS.map(p => `<option value="${p}" ${p === (w.pos || '') ? 'selected' : ''}>${p || '—'}</option>`).join('')}</select></div>
@@ -32,26 +32,38 @@
       ${id ? '<button class="btn full warn" data-del style="margin-top:14px">삭제</button>'
            : '<label class="tiny" style="display:flex;gap:6px;align-items:center;margin-top:10px"><input type="checkbox" data-cont checked style="width:auto"> 저장 후 계속 입력</label>'}`;
 
+    const dupText = d => `이미 있음 · ${e((Store.deck(d.deckId) || {}).name || '')}${d.ko ? ' · ' + e(d.ko) : ''}`;
+
+    function commit(box, close) {
+      const g = f => box.querySelector(`[data-f="${f}"]`).value.trim();
+      const o = Object.assign(w, {
+        deckId: g('deckId'), en: g('en'), ko: g('ko'), syn: g('syn'), cf: g('cf'), pos: g('pos'),
+        imp: +box.querySelector('.impsel .on').dataset.imp
+      });
+      Store.saveWord(o); Sync.auto();
+      const cont = box.querySelector('[data-cont]');
+      if (!id && cont && cont.checked) {
+        delete w.id; delete w.c; delete w.u;   // 다음 저장은 새 레코드로
+        ['en', 'ko', 'syn', 'cf'].forEach(f => box.querySelector(`[data-f="${f}"]`).value = '');
+        box.querySelector('[data-f="en"]').focus();
+        box.querySelector('[data-dup]').hidden = true;
+        UI.toast('저장됨 · 계속 입력');
+        App.refresh();
+        return;   // 시트 유지
+      }
+      close(); UI.toast('저장됨'); App.refresh();
+    }
+
     const sh = UI.sheet({
       title: id ? '단어 수정' : '단어 추가', ok: '저장',
       onOk: (box, close) => {
-        const g = f => box.querySelector(`[data-f="${f}"]`).value.trim();
-        if (!g('en')) { UI.toast('영단어를 입력하세요'); return false; }
-        const o = Object.assign(w, {
-          deckId: g('deckId'), en: g('en'), ko: g('ko'), syn: g('syn'), cf: g('cf'), pos: g('pos'),
-          imp: +box.querySelector('.impsel .on').dataset.imp
-        });
-        Store.saveWord(o); Sync.auto();
-        const cont = box.querySelector('[data-cont]');
-        if (!id && cont && cont.checked) {
-          delete w.id; delete w.c; delete w.u;   // 다음 저장은 새 레코드로
-          ['en', 'ko', 'syn', 'cf'].forEach(f => box.querySelector(`[data-f="${f}"]`).value = '');
-          box.querySelector('[data-f="en"]').focus();
-          UI.toast('저장됨 · 계속 입력');
-          App.refresh();
-          return false;   // 시트 유지
-        }
-        UI.toast('저장됨'); App.refresh();
+        const en = box.querySelector('[data-f="en"]').value.trim();
+        if (!en) { UI.toast('영단어를 입력하세요'); return false; }
+        const dup = Store.findByEn(en, w.id);
+        if (!dup) { commit(box, close); return false; }
+        UI.confirm(`'${e(dup.en)}'이(가) 이미 있습니다<br><span class="tiny">${dupText(dup)}</span><br>그래도 저장할까요?`, '저장')
+          .then(ok => { if (ok) commit(box, close); });
+        return false;
       }
     });
     sh.el.innerHTML = html;
@@ -59,11 +71,22 @@
       const b = ev.target.closest('[data-imp]'); if (!b) return;
       sh.el.querySelectorAll('.impsel button').forEach(x => x.classList.toggle('on', x === b));
     };
+    const enIn = sh.el.querySelector('[data-f="en"]'), dupEl = sh.el.querySelector('[data-dup]');
+    const checkDup = () => { const d = Store.findByEn(enIn.value, w.id); dupEl.hidden = !d; if (d) dupEl.innerHTML = dupText(d); };
+    enIn.oninput = checkDup; checkDup();
     const del = sh.el.querySelector('[data-del]');
     if (del) del.onclick = async () => {
       if (await UI.confirm('이 단어를 삭제할까요?')) { Store.delWord(id); Sync.auto(); sh.close(); App.refresh(); }
     };
     if (!id) setTimeout(() => sh.el.querySelector('[data-f="en"]').focus(), 250);
+  }
+
+  // 첫 구분자에서만 분리. 하이픈은 양옆 공백 또는 뒤에 한글이 올 때만 구분자 (well-being 보호)
+  const DELIM = /\t|\s*[–—:|]\s*|\s+-\s*|-\s*(?=[\u3131-\uD79D])/;
+  function splitLine(L) {
+    const m = L.match(DELIM);
+    if (!m) return [L.trim(), ''];
+    return [L.slice(0, m.index).trim(), L.slice(m.index + m[0].length).trim()];
   }
 
   function bulk() {
@@ -75,14 +98,17 @@
         const deckId = box.querySelector('[data-f="deckId"]').value;
         const imp = +box.querySelector('.impsel .on').dataset.imp;
         const lines = box.querySelector('textarea').value.split('\n').map(s => s.trim()).filter(Boolean);
-        let n = 0;
+        const seen = new Set();
+        let n = 0, skip = 0;
         lines.forEach(L => {
-          const m = L.split(/\s*[-–—:\t|]\s*/);
-          const en = (m[0] || '').trim(); if (!en) return;
-          Store.saveWord({ deckId, en, ko: (m.slice(1).join(' - ') || '').trim(), syn: '', cf: '', pos: '', imp, st: 0 });
+          const [en, ko] = splitLine(L); if (!en) return;
+          const k = Store.norm(en);
+          if (seen.has(k) || Store.findByEn(en)) { skip++; return; }
+          seen.add(k);
+          Store.saveWord({ deckId, en, ko, syn: '', cf: '', pos: '', imp, st: 0 });
           n++;
         });
-        Sync.auto(); UI.toast(n + '개 추가됨'); App.refresh();
+        Sync.auto(); UI.toast(n + '개 추가됨' + (skip ? ` · 중복 ${skip}개 건너뜀` : ''), skip ? 2600 : 1500); App.refresh();
       }
     });
     sh.el.innerHTML =
@@ -96,6 +122,28 @@
     };
   }
 
+  function paintList(root) {
+    const e = UI.esc, list = Store.query();
+    root.querySelector('.wcount').textContent = `${list.length}개`;
+    root.querySelector('.wlist').innerHTML = list.length ? list.map(w =>
+        `<div class="w" data-w="${w.id}" style="border-left-color:${dcolor(w.deckId)}">
+          <div class="w-top">
+            <span class="w-en">${e(w.en)}</span>
+            ${w.pos ? `<span class="w-pos">${e(w.pos)}</span>` : ''}
+            <span class="w-imp">${IMP[w.imp || 2]}</span>
+            <button class="say no-print" data-say aria-label="발음 듣기">♪</button>
+          </div>
+          ${w.ko ? `<div class="w-ko">${e(w.ko)}</div>` : ''}
+          ${w.syn ? `<div class="w-sub"><b>syn</b><span>${e(w.syn)}</span></div>` : ''}
+          ${w.cf ? `<div class="w-sub"><b>cf.</b><span>${e(w.cf)}</span></div>` : ''}
+          <div class="w-st no-print">
+            ${ST.map((l, i) => `<button class="st-b ${(w.st || 0) === i ? 'on' : ''}" data-st="${i}">${l}</button>`).join('')}
+          </div>
+        </div>`).join('') : `<div class="empty">단어가 없습니다</div>`;
+  }
+
+  window.WordForm = form;
+
   App.register({
     id: 'words', name: '단어',
     actions(el) {
@@ -108,7 +156,6 @@
     render(root) {
       const S = Store.settings, e = UI.esc;
       const decks = Store.decks();
-      if (S.sort === 'rand' && !seed) seed = 1;
 
       root.innerHTML =
         `<div class="print-head">단어장 — ${S.deck === 'all' ? '전체' : e((Store.deck(S.deck) || {}).name || '')}</div>
@@ -116,7 +163,7 @@
           <button class="chip ${S.deck === 'all' ? 'on' : ''}" data-d="all">전체</button>
           ${decks.map(d => `<button class="chip ${S.deck === d.id ? 'on' : ''}" data-d="${d.id}"><i class="dot" style="background:${d.color}"></i>${e(d.name)}</button>`).join('')}
         </div>
-        <div class="row" style="margin:8px 0 7px"><input data-q value="${e(S.q)}" placeholder="검색" autocapitalize="off"></div>
+        <div class="row no-print" style="margin:8px 0 7px"><input data-q value="${e(S.q)}" placeholder="검색" autocapitalize="off"></div>
         <div class="row" style="gap:7px">
           <div class="seg" data-sort style="flex:1.4">
             ${[['imp', '중요도↓'], ['imp_asc', '중요도↑'], ['az', 'A–Z'], ['rand', '랜덤']]
@@ -130,22 +177,7 @@
         <div class="wlist"></div>
         <button class="fab no-print" data-add>+</button>`;
 
-      const list = Store.query();
-      root.querySelector('.wcount').textContent = `${list.length}개`;
-      root.querySelector('.wlist').innerHTML = list.length ? list.map(w =>
-        `<div class="w" data-w="${w.id}" style="border-left-color:${dcolor(w.deckId)}">
-          <div class="w-top">
-            <span class="w-en">${e(w.en)}</span>
-            ${w.pos ? `<span class="w-pos">${e(w.pos)}</span>` : ''}
-            <span class="w-imp">${IMP[w.imp || 2]}</span>
-          </div>
-          ${w.ko ? `<div class="w-ko">${e(w.ko)}</div>` : ''}
-          ${w.syn ? `<div class="w-sub"><b>syn</b><span>${e(w.syn)}</span></div>` : ''}
-          ${w.cf ? `<div class="w-sub"><b>cf.</b><span>${e(w.cf)}</span></div>` : ''}
-          <div class="w-st no-print">
-            ${ST.map((l, i) => `<button class="st-b ${(w.st || 0) === i ? 'on' : ''}" data-st="${i}">${l}</button>`).join('')}
-          </div>
-        </div>`).join('') : `<div class="empty">단어가 없습니다</div>`;
+      paintList(root);
 
       root.querySelector('[data-deck]').onclick = ev => {
         const b = ev.target.closest('[data-d]'); if (!b) return;
@@ -163,11 +195,13 @@
         Store.set('st', st.sort()); App.refresh();
       };
       const q = root.querySelector('[data-q]');
-      let qt; q.oninput = () => { clearTimeout(qt); qt = setTimeout(() => { Store.set('q', q.value); App.refresh(); }, 260); };
+      // 목록만 갱신 → 검색창 포커스·키보드 유지
+      let qt; q.oninput = () => { clearTimeout(qt); qt = setTimeout(() => { Store.set('q', q.value); paintList(root); }, 260); };
 
       root.querySelector('.wlist').onclick = ev => {
         const sb = ev.target.closest('[data-st]');
         const card = ev.target.closest('[data-w]'); if (!card) return;
+        if (ev.target.closest('[data-say]')) { UI.speak((Store.word(card.dataset.w) || {}).en); return; }
         if (sb) {
           Store.setStatus(card.dataset.w, +sb.dataset.st); Sync.auto();
           card.querySelectorAll('.st-b').forEach(x => x.classList.toggle('on', x === sb));

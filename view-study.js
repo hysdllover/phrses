@@ -60,7 +60,7 @@
           `<div class="f-ko">${e(w.ko) || '<span class="muted">—</span>'}</div>
            ${w.syn ? `<div class="f-line"><b>syn</b>${e(w.syn)}</div>` : ''}
            ${w.cf ? `<div class="f-line"><b>cf.</b>${e(w.cf)}</div>` : ''}`;
-        const enBlock = `<div class="f-en">${e(w.en)}</div>`;
+        const enBlock = `<div class="f-en">${e(w.en)}<button class="say" data-say aria-label="발음 듣기">♪</button></div>`;
 
         wrap.innerHTML =
           `<div class="prog" style="margin-top:14px"><i style="width:${((i + 1) / queue.length * 100).toFixed(1)}%"></i></div>
@@ -79,7 +79,10 @@
             <button class="btn dim" data-edit style="flex:1">수정</button>
           </div>`;
 
-        wrap.querySelector('[data-card]').onclick = () => { open = !open; App.refresh(); };
+        wrap.querySelector('[data-card]').onclick = ev => {
+          if (ev.target.closest('[data-say]')) { ev.stopPropagation(); UI.speak(w.en); return; }
+          open = !open; App.refresh();
+        };
         wrap.querySelector('.stbar').onclick = ev => {
           const b = ev.target.closest('[data-set]'); if (!b) return;
           Store.setStatus(w.id, +b.dataset.set); Sync.auto();
@@ -88,7 +91,7 @@
         wrap.onclick = ev => {
           const n = ev.target.closest('[data-nav]');
           if (n) { i = Math.min(queue.length - 1, Math.max(0, i + (+n.dataset.nav))); open = false; App.refresh(); }
-          if (ev.target.closest('[data-edit]')) { Store.set('deck', S.deck); App.go('words'); }
+          if (ev.target.closest('[data-edit]')) window.WordForm(w.id);
         };
       }
 
