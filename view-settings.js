@@ -13,7 +13,7 @@
       root.innerHTML =
         `<div class="sec">GITHUB GIST 동기화</div>
         <div class="fld"><label>토큰 <span class="tiny">classic · gist 스코프</span></label>
-          <input data-f="token" type="text" value="${e(c.token || '')}" placeholder="ghp_..."
+          <input data-f="token" type="password" value="${e(c.token || '')}" placeholder="ghp_..."
             autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off"
             style="font-family:ui-monospace,Menlo,monospace;font-size:11px"></div>
         <div class="fld"><label>Gist ID <span class="tiny">첫 기기는 비워둘 것</span></label>

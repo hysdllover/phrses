@@ -53,5 +53,18 @@ const UI = (() => {
   const esc = s => (s == null ? '' : String(s))
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-  return { sheet, confirm, toast, esc };
+  // 발음 듣기 (기기 내장 음성)
+  function speak(text) {
+    const ss = window.speechSynthesis;
+    if (!ss || typeof SpeechSynthesisUtterance === 'undefined') { toast('이 기기는 음성을 지원하지 않습니다'); return; }
+    text = String(text || '').trim(); if (!text) return;
+    ss.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'en-US'; u.rate = 0.9;
+    const v = ss.getVoices().find(x => /^en[-_]US/i.test(x.lang)) || ss.getVoices().find(x => /^en/i.test(x.lang));
+    if (v) u.voice = v;
+    ss.speak(u);
+  }
+
+  return { sheet, confirm, toast, esc, speak };
 })();

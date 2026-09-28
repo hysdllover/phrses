@@ -49,16 +49,31 @@ const Store = (() => {
     save(false);
   }
 
+  // 용량 초과 시 오래된 스냅샷부터 지우고 재시도
+  function put(k, v) {
+    for (;;) {
+      try { localStorage.setItem(k, v); return true; }
+      catch (e) {
+        const old = snapKeys().reverse().filter(x => x !== k);
+        if (!old.length) return false;
+        localStorage.removeItem(old[0]);
+      }
+    }
+  }
+
   function save(snap = true) {
-    localStorage.setItem(KEY, JSON.stringify(data));
+    if (!put(KEY, JSON.stringify(data))) {
+      if (typeof UI !== 'undefined') UI.toast('저장 공간 부족 · JSON 내보내기를 권장합니다', 4000);
+      return;
+    }
     if (snap) snapshot();
   }
 
   function snapshot() {
     const k = SNAP_PREFIX + new Date().toISOString().slice(0, 10);
     if (localStorage.getItem(k)) return;
-    try { localStorage.setItem(k, JSON.stringify(data)); } catch (e) {}
-    const keys = Object.keys(localStorage).filter(x => x.startsWith(SNAP_PREFIX)).sort();
+    try { localStorage.setItem(k, JSON.stringify(data)); } catch (e) { return; }   // 스냅샷은 본 데이터보다 후순위
+    const keys = snapKeys().reverse();
     while (keys.length > 7) localStorage.removeItem(keys.shift());
   }
   const snapKeys = () => Object.keys(localStorage).filter(x => x.startsWith(SNAP_PREFIX)).sort().reverse();
@@ -105,8 +120,10 @@ const Store = (() => {
   function setStatus(id, st) {
     const w = word(id); if (!w) return;
     w.st = st; w.u = now(); save(false);
-    localStorage.setItem(KEY, JSON.stringify(data));
   }
+  // 중복 확인: 대소문자·공백 무시
+  const norm = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const findByEn = (en, exceptId) => { const k = norm(en); return k ? allWords().find(w => w.id !== exceptId && norm(w.en) === k) : null; };
 
   /* query */
   function query(opt) {
@@ -132,7 +149,7 @@ const Store = (() => {
   }
 
   /* settings */
-  function set(k, v) { data.settings[k] = v; save(false); localStorage.setItem(KEY, JSON.stringify(data)); }
+  function set(k, v) { data.settings[k] = v; save(false); }
 
   /* sync */
   const raw = () => data;
@@ -161,7 +178,7 @@ const Store = (() => {
   return {
     init, save, PALETTE, uid, now,
     decks, deck, saveDeck, delDeck,
-    allWords, word, saveWord, delWord, setStatus, countOf,
+    allWords, word, saveWord, delWord, setStatus, countOf, findByEn, norm,
     query, shuffle, set, get settings() { return data.settings; },
     raw, merge, replaceAll, snapKeys, restore
   };
