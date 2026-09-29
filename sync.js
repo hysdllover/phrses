@@ -61,62 +61,84 @@ const Sync = (() => {
     try { return JSON.parse(txt); } catch (e) { throw new Error('서버 데이터를 읽을 수 없습니다'); }
   }
 
-  async function push() {
+  async function push(keep) {
     const c = cfg();
     const files = {}; files[FILE] = { content: JSON.stringify(Store.raw()) };
-    const g = c.gistId
-      ? await req(API + '/' + c.gistId, { method: 'PATCH', headers: headers(), body: JSON.stringify({ files: files }) })
-      : await req(API, { method: 'POST', headers: headers(), body: JSON.stringify({ description: 'WORDS vocab data', public: false, files: files }) });
-    setCfg({ gistId: g.id, at: Date.now(), err: '' });
+    const body = c.gistId ? JSON.stringify({ files: files })
+      : JSON.stringify({ description: 'WORDS vocab data', public: false, files: files });
+    const opt = { method: c.gistId ? 'PATCH' : 'POST', headers: headers(), body: body };
+    if (keep && body.length < 60000) opt.keepalive = true;   // 앱이 닫혀도 전송 완료 (64KB 제한)
+    const g = await req(c.gistId ? API + '/' + c.gistId : API, opt);
+    setCfg({ gistId: g.id, pushAt: Date.now(), err: '' });
     return g.id;
   }
 
-  async function run() {
-    try {
-      const remote = await pull();
-      if (remote) Store.merge(remote);
-      await push();
-      setCfg({ at: Date.now(), err: '' });
-      return true;
-    } catch (e) {
-      setCfg({ err: e.message || String(e) });
-      throw e;
-    }
+  /* pull → 병합 → push. 도중에 생긴 변경은 dirty로 남겨 다음에 다시 올림 */
+  let busy = null;
+  function run(keep) {
+    if (busy) return busy.then(() => (cfg().dirty ? run(keep) : true));
+    busy = (async () => {
+      const mark = cfg().dirty;
+      try {
+        const remote = await pull();
+        if (remote && Store.merge(remote)) App.refresh();
+        if (remote) setCfg({ pullAt: Date.now() });
+        await push(keep);
+        if (cfg().dirty === mark) setCfg({ dirty: 0 });
+        setCfg({ at: Date.now(), err: '' });
+        return true;
+      } catch (e) {
+        setCfg({ err: e.message || String(e) });
+        throw e;
+      } finally { busy = null; }
+    })();
+    return busy;
   }
 
-  /* 변경 후 지연 자동 업로드 */
+  const ready = () => { const c = cfg(); return !!(cleanToken(c.token) && c.gistId); };
+
+  /* 변경 표시 후 지연 업로드. dirty는 저장되므로 앱이 닫혀도 다음 실행 때 올라감 */
   let t = null;
   function auto() {
-    const c = cfg();
-    if (!cleanToken(c.token) || !c.gistId) return;
+    if (!ready()) return;
+    setCfg({ dirty: Date.now() });
     clearTimeout(t);
-    t = setTimeout(function () { run().catch(function () { }); }, 6000);
+    t = setTimeout(function () { run().catch(function () { }); }, 2000);
+  }
+  function flush() {
+    clearTimeout(t);
+    if (ready() && cfg().dirty) run(true).catch(function () { });
   }
 
-  /* 앱 진입 / 복귀 시 서버 변경분 자동 반영 */
-  let booting = false;
+  /* 앱 진입 / 복귀 / 주기적으로 서버 변경분 반영. 올리지 못한 변경이 있으면 함께 업로드 */
   async function boot(silent) {
-    const c = cfg();
-    if (booting || !cleanToken(c.token) || !c.gistId) return;
-    booting = true;
-    try {
-      const remote = await pull();
-      if (remote) {
-        const n = Store.merge(remote);
-        if (n) { if (!silent) UI.toast(n + '건 반영됨'); App.refresh(); }
-      }
-      setCfg({ at: Date.now(), err: '' });
-    } catch (e) { setCfg({ err: e.message || String(e) }); }
-    booting = false;
+    if (!ready() || busy) return;
+    if (cfg().dirty) { try { await run(); } catch (e) { } return; }
+    busy = (async () => {
+      try {
+        const remote = await pull();
+        if (remote) {
+          const n = Store.merge(remote);
+          if (n) { if (!silent) UI.toast(n + '건 반영됨'); App.refresh(); }
+        }
+        setCfg({ pullAt: Date.now(), at: Date.now(), err: '' });
+      } catch (e) { setCfg({ err: e.message || String(e) }); }
+      finally { busy = null; }
+    })();
+    await busy;
   }
 
   function watch() {
-    document.addEventListener('visibilitychange', function () { if (!document.hidden) boot(true); });
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) flush(); else boot(true);
+    });
+    window.addEventListener('pagehide', flush);
     window.addEventListener('online', function () { boot(true); });
+    setInterval(function () { if (!document.hidden) boot(true); }, 60000);
   }
 
-  return { VERSION: 3,
+  return { VERSION: 4,
            cfg: cfg, setCfg: setCfg, cleanToken: cleanToken, cleanId: cleanId,
-           test: test, pull: pull, push: push, run: run, auto: auto, boot: boot, watch: watch };
+           test: test, pull: pull, push: push, run: run, auto: auto, flush: flush, boot: boot, watch: watch };
 })();
 window.Sync = Sync;
