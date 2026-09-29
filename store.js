@@ -166,7 +166,20 @@ const Store = (() => {
     };
     data.decks = mix(data.decks, remote.decks || []);
     data.words = mix(data.words, remote.words || []);
+    n += dedupeDecks();
     purge(); save(); return n;
+  }
+  // 기기마다 따로 만든 같은 이름 덱 → id가 가장 작은 덱으로 통합 (양쪽 기기가 같은 결과로 수렴)
+  function dedupeDecks() {
+    const keep = {}, t = now(); let n = 0;
+    alive(data.decks).slice().sort((a, b) => a.id < b.id ? -1 : 1).forEach(d => {
+      const k = d.name.trim().toLowerCase();
+      if (!keep[k]) { keep[k] = d; return; }
+      data.words.forEach(w => { if (w.deckId === d.id && !w.d) { w.deckId = keep[k].id; w.u = t; n++; } });
+      if (data.settings.deck === d.id) data.settings.deck = keep[k].id;
+      d.d = t; d.u = t; n++;
+    });
+    return n;
   }
   function purge() {
     const cut = now() - PURGE_DAYS * 864e5;
