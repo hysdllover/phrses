@@ -43,6 +43,23 @@ const App = (() => {
     if (!byId[cur]) cur = views[0].id;
     paint(true);
     try { if (typeof Sync !== 'undefined' && Sync.watch) { Sync.watch(); Sync.boot(true); } } catch (e) { logErr(e); }
+    seed('601900', 'seed-601-900.js', 'SEED_601_900');
+  }
+
+  // 기본 제공 덱: 기기마다 한 번만 병합 (고정 id → 기기간 중복 없음, 삭제한 덱은 tombstone이 우선)
+  function seed(key, src, name) {
+    const k = 'vocab.seed.' + key;
+    if (localStorage.getItem(k)) return;
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = () => {
+      try {
+        const n = Store.merge(window[name]);
+        localStorage.setItem(k, Date.now());
+        if (n) { Sync.auto(); refresh(); }
+      } catch (e) { logErr(e); }
+    };
+    document.body.appendChild(s);
   }
 
   // 전역 오류를 기록해 설정 화면에서 확인할 수 있게 함
