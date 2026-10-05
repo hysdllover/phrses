@@ -59,7 +59,7 @@
         const koBlock =
           `<div class="f-ko">${e(w.ko) || '<span class="muted">—</span>'}</div>
            ${w.syn ? `<div class="f-line"><b>syn</b>${e(w.syn)}</div>` : ''}
-           ${w.cf ? `<div class="f-line"><b>cf.</b>${e(w.cf)}</div>` : ''}`;
+           ${w.cf ? `<div class="f-line cf"><b>cf.</b>${UI.rich(w.cf)}</div>` : ''}`;
         const enBlock = `<div class="f-en">${e(w.en)}<button class="say" data-say aria-label="발음 듣기">♪</button></div>`;
 
         wrap.innerHTML =

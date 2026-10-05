@@ -28,7 +28,7 @@
       </div>
       <div class="fld"><label>의미</label><textarea data-f="ko" rows="2" placeholder="뜻">${e(w.ko)}</textarea></div>
       <div class="fld"><label>유의어</label><input data-f="syn" value="${e(w.syn)}" autocapitalize="off" placeholder="syn1, syn2"></div>
-      <div class="fld"><label>cf.</label><input data-f="cf" value="${e(w.cf)}" placeholder="비교·파생·메모"></div>
+      <div class="fld"><label>cf.</label><textarea data-f="cf" rows="2" placeholder="비교·파생·메모 · __밑줄__">${e(w.cf)}</textarea></div>
       ${id ? '<button class="btn full warn" data-del style="margin-top:14px">삭제</button>'
            : '<label class="tiny" style="display:flex;gap:6px;align-items:center;margin-top:10px"><input type="checkbox" data-cont checked style="width:auto"> 저장 후 계속 입력</label>'}`;
 
@@ -135,7 +135,7 @@
           </div>
           ${w.ko ? `<div class="w-ko">${e(w.ko)}</div>` : ''}
           ${w.syn ? `<div class="w-sub"><b>syn</b><span>${e(w.syn)}</span></div>` : ''}
-          ${w.cf ? `<div class="w-sub"><b>cf.</b><span>${e(w.cf)}</span></div>` : ''}
+          ${w.cf ? `<div class="w-sub"><b>cf.</b><span class="cf">${UI.rich(w.cf)}</span></div>` : ''}
           <div class="w-st no-print">
             ${ST.map((l, i) => `<button class="st-b ${(w.st || 0) === i ? 'on' : ''}" data-st="${i}">${l}</button>`).join('')}
           </div>
