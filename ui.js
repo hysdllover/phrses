@@ -66,5 +66,8 @@ const UI = (() => {
     ss.speak(u);
   }
 
-  return { sheet, confirm, toast, esc, speak };
+  // 표시용: 이스케이프 후 __밑줄__ → <u>
+  const rich = s => esc(s).replace(/__(.+?)__/g, '<u>$1</u>');
+
+  return { sheet, confirm, toast, esc, rich, speak };
 })();
