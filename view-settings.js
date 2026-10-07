@@ -36,7 +36,7 @@
         <div class="card" style="padding:10px 12px;font-size:11px;line-height:1.8;color:var(--tx2)">
           sync.js ${(typeof Sync !== 'undefined' && Sync.VERSION) || '구버전 ⚠'} ·
           app.js ${(typeof App !== 'undefined' && App.VERSION) || '구버전 ⚠'} ·
-          store v${Store.raw().v}
+          store v${Store.raw().v} · build ${window.BUILD || '?'}
           ${(typeof Sync === 'undefined' || Sync.VERSION !== 6 || typeof App === 'undefined' || App.VERSION !== 3)
             ? '<div style="color:#a97b7b;margin-top:4px">파일이 최신이 아닙니다. sync.js · app.js · view-settings.js를 다시 올리고 새로고침하세요.</div>' : ''}
           <div data-log style="margin-top:4px;word-break:break-all"></div>
@@ -88,9 +88,7 @@
             UI.toast(`추가 ${r.added} · 갱신 ${r.updated} · 중복 제외 ${r.skipped}` + (r.decks ? ` · 새 덱 ${r.decks}` : ''), 3000);
           } else {
             if (!(await UI.confirm('이 기기의 단어장을 파일 내용으로 교체할까요?', '교체'))) return;
-            const t = Date.now();
-            (d.decks || []).concat(d.words).forEach(x => { x.u = t; });
-            Store.replaceAll(d); Sync.auto(); sh.close(); UI.toast('파일 내용으로 교체됨');
+            Store.replaceFrom(d); Sync.auto(); sh.close(); UI.toast('파일 내용으로 교체됨');
           }
           App.refresh();
         };

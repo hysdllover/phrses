@@ -52,7 +52,7 @@ const App = (() => {
     const k = 'vocab.seed.' + key;
     if (localStorage.getItem(k)) return;
     const s = document.createElement('script');
-    s.src = src;
+    s.src = src + '?v=' + (window.BUILD || '0');
     s.onload = () => {
       try {
         const n = Store.merge(window[name]);
