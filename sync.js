@@ -20,7 +20,6 @@ const Sync = (() => {
 
   const hm = t => new Date(t).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
   const held = () => Date.now() < (cfg().holdUntil || 0);
-  let retryT = null;
 
   function headers() {
     const t = cleanToken(cfg().token);
@@ -44,9 +43,7 @@ const Sync = (() => {
       const until = h('retry-after') ? Date.now() + (+h('retry-after')) * 1000
         : h('x-ratelimit-reset') ? (+h('x-ratelimit-reset')) * 1000 : Date.now() + 60000;
       setCfg({ holdUntil: Math.max(until, Date.now() + 30000) });
-      clearTimeout(retryT);
-      retryT = setTimeout(function () { boot(true); }, cfg().holdUntil - Date.now() + 1000);   // 대기 끝나면 바로 재시도
-      throw new Error('요청 한도 초과 — ' + hm(cfg().holdUntil) + ' 이후 자동 재시도');
+      throw new Error('요청 한도 초과 — ' + hm(cfg().holdUntil) + ' 이후 다시 시도하세요');
     }
     if (r.status === 403) throw new Error('권한 없음 (403)' + (msg ? ' — ' + msg : '') + ' · 토큰의 gist 스코프를 확인하세요');
     if (r.status === 404) throw new Error('Gist를 찾을 수 없습니다 (404) — ID 칸을 비우고 다시 동기화하세요');
@@ -95,7 +92,7 @@ const Sync = (() => {
   /* pull → 병합 → push. 도중에 생긴 변경은 dirty로 남겨 다음에 다시 올림 */
   let busy = null;
   function run(keep) {
-    if (held()) return Promise.reject(new Error('요청 한도 초과 — ' + hm(cfg().holdUntil) + ' 이후 자동 재시도'));
+    if (held()) return Promise.reject(new Error('요청 한도 초과 — ' + hm(cfg().holdUntil) + ' 이후 다시 시도하세요'));
     if (busy) return busy.then(() => (cfg().dirty ? run(keep) : true));
     busy = (async () => {
       const mark = cfg().dirty;
@@ -117,20 +114,9 @@ const Sync = (() => {
 
   const ready = () => { const c = cfg(); return !!(cleanToken(c.token) && c.gistId); };
 
-  /* 변경 표시 후 지연 업로드. dirty는 저장되므로 앱이 닫혀도 다음 실행 때 올라감 */
-  // 업로드는 최소 30초 간격 (GitHub 요청 한도 보호)
-  const GAP = 30000;
-  let t = null;
+  // 수동 동기화: 변경 표시만 남기고, 업로드는 '지금 동기화'를 누를 때
   function auto() {
-    if (!ready()) return;
-    setCfg({ dirty: Date.now() });
-    clearTimeout(t);
-    const wait = Math.max(2000, (cfg().pushAt || 0) + GAP - Date.now(), (cfg().holdUntil || 0) - Date.now());
-    t = setTimeout(function () { run().catch(function () { }); }, wait);
-  }
-  function flush() {
-    clearTimeout(t);
-    if (ready() && cfg().dirty && !held()) run(true).catch(function () { });
+    if (ready()) setCfg({ dirty: Date.now() });
   }
 
   /* 앱 진입 / 복귀 / 주기적으로 서버 변경분 반영. 올리지 못한 변경이 있으면 함께 업로드 */
@@ -151,17 +137,10 @@ const Sync = (() => {
     await busy;
   }
 
-  function watch() {
-    document.addEventListener('visibilitychange', function () {
-      if (document.hidden) flush(); else boot(true);
-    });
-    window.addEventListener('pagehide', flush);
-    window.addEventListener('online', function () { boot(true); });
-    setInterval(function () { if (!document.hidden) boot(true); }, 120000);
-  }
+  function watch() { }   // 수동 동기화 모드: 자동 가져오기·업로드 없음
 
-  return { VERSION: 5, held: held,
+  return { VERSION: 6, held: held,
            cfg: cfg, setCfg: setCfg, cleanToken: cleanToken, cleanId: cleanId,
-           test: test, pull: pull, push: push, run: run, auto: auto, flush: flush, boot: boot, watch: watch };
+           test: test, pull: pull, push: push, run: run, auto: auto, boot: boot, watch: watch };
 })();
 window.Sync = Sync;
