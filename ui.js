@@ -9,7 +9,7 @@ const UI = (() => {
       `<div class="sheet">
          <div class="sh-h">
            <button data-x>닫기</button><b>${title}</b>
-           <button class="pri" data-ok ${ok ? '' : 'hidden'}>${ok}</button>
+           <button class="pri" data-ok ${ok ? '' : 'style="visibility:hidden"'}>${ok || '저장'}</button>
          </div>
          <div class="sh-b"></div>
        </div>`;

@@ -195,11 +195,37 @@ const Store = (() => {
   }
   function replaceAll(d) { data = migrate(d); save(); }
 
+  /* 파일 가져오기 (중복 없이 병합)
+     - 같은 id: 최신(u) 우선 / 같은 이름 덱: 기존 덱으로 합침 / 같은 영단어(대소문자·공백 무시): 건너뜀 */
+  function importMerge(d) {
+    const t = now(), r = { added: 0, updated: 0, skipped: 0, decks: 0 };
+    const idMap = {};
+    alive(d.decks || []).forEach(x => {
+      const same = deck(x.id) || decks().find(y => norm(y.name) === norm(x.name));
+      if (same) { idMap[x.id] = same.id; return; }
+      const nd = Object.assign({}, x, { id: data.decks.some(y => y.id === x.id) ? uid() : x.id, o: data.decks.length, u: t });
+      data.decks.push(nd); idMap[x.id] = nd.id; r.decks++;
+    });
+    const seen = new Set(alive(data.words).map(w => norm(w.en)));
+    alive(d.words).forEach(x => {
+      const w = Object.assign({}, x, { deckId: idMap[x.deckId] || x.deckId });
+      const i = data.words.findIndex(y => y.id === w.id);
+      if (i >= 0) {
+        if ((w.u || 0) > (data.words[i].u || 0)) { data.words[i] = w; r.updated++; } else r.skipped++;
+        return;
+      }
+      const k = norm(w.en);
+      if (!k || seen.has(k) || !deck(w.deckId)) { r.skipped++; return; }
+      seen.add(k); w.u = t; w.c = w.c || t; data.words.push(w); r.added++;
+    });
+    save(); return r;
+  }
+
   return {
     init, save, PALETTE, uid, now,
     decks, deck, saveDeck, delDeck,
     allWords, word, saveWord, delWord, setStatus, countOf, findByEn, norm,
     query, shuffle, set, get settings() { return data.settings; },
-    raw, merge, replaceAll, snapKeys, restore
+    raw, merge, replaceAll, importMerge, snapKeys, restore
   };
 })();
