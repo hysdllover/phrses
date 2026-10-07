@@ -24,6 +24,7 @@
         <button class="btn full" data-a="sync" style="margin-bottom:7px">지금 동기화 (병합 후 업로드)</button>
         <button class="btn full dim" data-a="pull" style="margin-bottom:7px">서버 데이터만 가져오기</button>
         ${state}
+        ${c.token || c.gistId ? '<button class="btn full warn" data-a="unlink" style="margin-top:9px">동기화 연결 끊기</button>' : ''}
 
         <div class="sec">백업</div>
         <button class="btn full" data-a="export" style="margin-bottom:7px">JSON 내보내기</button>
@@ -107,13 +108,24 @@
         }
 
         if (a === 'import') {
-          const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json';
+          // iOS는 accept 지정 시 .json이 비활성화되는 경우가 있어 제한 없이 열고, DOM에 붙여서 클릭
+          const inp = document.createElement('input'); inp.type = 'file'; inp.hidden = true;
+          document.body.appendChild(inp);
           inp.onchange = () => {
-            const f = inp.files[0]; if (!f) return;
+            const f = inp.files[0]; inp.remove(); if (!f) return;
             const rd = new FileReader();
-            rd.onload = () => {
-              try { UI.toast(Store.merge(JSON.parse(rd.result)) + '건 병합됨'); App.refresh(); }
-              catch (err) { UI.toast('파일을 읽을 수 없습니다'); }
+            rd.onload = async () => {
+              let d;
+              try { d = JSON.parse(rd.result); if (!d || !Array.isArray(d.words)) throw 0; }
+              catch (err) { UI.toast('단어장 JSON 파일이 아닙니다', 2600); return; }
+              const n = Store.merge(d);
+              if (n) { Sync.auto(); UI.toast(n + '건 병합됨'); App.refresh(); return; }
+              // 기기 데이터가 더 최신이라 병합으로는 바뀌지 않음 → 파일로 덮어쓸지 확인
+              if (await UI.confirm('바뀐 항목이 없습니다 (기기 데이터가 더 최신).<br>이 파일 내용으로 덮어쓸까요?<br><span class="tiny">파일에 없는 단어·덱은 이 기기에서 지워집니다. 자동 스냅샷으로 되돌릴 수 있습니다.</span>', '덮어쓰기')) {
+                const t = Date.now();
+                (d.decks || []).concat(d.words).forEach(x => { x.u = t; });
+                Store.replaceAll(d); Sync.auto(); UI.toast('파일 내용으로 교체됨'); App.refresh();
+              }
             };
             rd.readAsText(f);
           };
@@ -123,6 +135,12 @@
         if (a === 'reset') {
           if (await UI.confirm('이 기기의 모든 단어와 덱이 삭제됩니다.', '초기화')) {
             localStorage.removeItem('vocab.data'); location.reload();
+          }
+        }
+
+        if (a === 'unlink') {
+          if (await UI.confirm('동기화 연결을 끊을까요?<br><span class="tiny">토큰·Gist ID가 이 기기에서 지워집니다. 단어 데이터와 Gist는 그대로 남습니다.</span>', '연결 끊기')) {
+            localStorage.removeItem('vocab.sync'); UI.toast('연결 끊김'); App.refresh();
           }
         }
 
