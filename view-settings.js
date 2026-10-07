@@ -70,6 +70,32 @@
       root.onclick = async ev => { try { await handle(ev); }
         catch (err) { App.logErr(err); UI.toast('오류: ' + (err.message || err), 3500); App.refresh(); } };
 
+      // 가져오기 방식 선택: 중복 없이 병합 / 교체
+      function importSheet(d, name) {
+        const nd = (d.decks || []).filter(x => !x.d).length, nw = d.words.filter(x => !x.d).length;
+        const sh = UI.sheet({ title: 'JSON 가져오기', ok: '' });
+        sh.el.innerHTML =
+          `<div class="tiny" style="margin-bottom:12px;line-height:1.7">${e(name)}<br>덱 ${nd}개 · 단어 ${nw}개</div>
+           <button class="btn full" data-m="merge" style="margin-bottom:5px">병합 (중복 제외)</button>
+           <div class="tiny" style="margin:0 2px 14px;line-height:1.6">기존 단어는 그대로 두고 새 단어만 추가합니다. 같은 영단어는 건너뛰고, 같은 이름 덱은 기존 덱에 합칩니다.</div>
+           <button class="btn full warn" data-m="replace" style="margin-bottom:5px">교체</button>
+           <div class="tiny" style="margin:0 2px;line-height:1.6">이 기기의 단어장을 파일 내용으로 바꿉니다. 파일에 없는 단어·덱은 지워집니다 (자동 스냅샷으로 복원 가능).</div>`;
+        sh.el.onclick = async ev => {
+          const b = ev.target.closest('[data-m]'); if (!b) return;
+          if (b.dataset.m === 'merge') {
+            const r = Store.importMerge(d); sh.close();
+            if (r.added || r.updated || r.decks) Sync.auto();
+            UI.toast(`추가 ${r.added} · 갱신 ${r.updated} · 중복 제외 ${r.skipped}` + (r.decks ? ` · 새 덱 ${r.decks}` : ''), 3000);
+          } else {
+            if (!(await UI.confirm('이 기기의 단어장을 파일 내용으로 교체할까요?', '교체'))) return;
+            const t = Date.now();
+            (d.decks || []).concat(d.words).forEach(x => { x.u = t; });
+            Store.replaceAll(d); Sync.auto(); sh.close(); UI.toast('파일 내용으로 교체됨');
+          }
+          App.refresh();
+        };
+      }
+
       async function handle(ev) {
         const s = ev.target.closest('[data-snap]');
         if (s) {
@@ -118,14 +144,7 @@
               let d;
               try { d = JSON.parse(rd.result); if (!d || !Array.isArray(d.words)) throw 0; }
               catch (err) { UI.toast('단어장 JSON 파일이 아닙니다', 2600); return; }
-              const n = Store.merge(d);
-              if (n) { Sync.auto(); UI.toast(n + '건 병합됨'); App.refresh(); return; }
-              // 기기 데이터가 더 최신이라 병합으로는 바뀌지 않음 → 파일로 덮어쓸지 확인
-              if (await UI.confirm('바뀐 항목이 없습니다 (기기 데이터가 더 최신).<br>이 파일 내용으로 덮어쓸까요?<br><span class="tiny">파일에 없는 단어·덱은 이 기기에서 지워집니다. 자동 스냅샷으로 되돌릴 수 있습니다.</span>', '덮어쓰기')) {
-                const t = Date.now();
-                (d.decks || []).concat(d.words).forEach(x => { x.u = t; });
-                Store.replaceAll(d); Sync.auto(); UI.toast('파일 내용으로 교체됨'); App.refresh();
-              }
+              importSheet(d, f.name);
             };
             rd.readAsText(f);
           };
