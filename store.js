@@ -166,6 +166,8 @@ const Store = (() => {
     };
     data.decks = mix(data.decks, remote.decks || []);
     data.words = mix(data.words, remote.words || []);
+    if ((remote.cut || 0) > (data.cut || 0)) data.cut = remote.cut;
+    n += applyCut();
     n += dedupeDecks();
     purge(); save(); return n;
   }
@@ -194,6 +196,31 @@ const Store = (() => {
     data.words = data.words.filter(x => !x.d || x.d > cut);
   }
   function replaceAll(d) { data = migrate(d); save(); }
+
+  /* 파일로 교체: 파일에 없는 항목은 삭제 표시(tombstone)로 남겨 동기화 시 다른 기기·서버에도 삭제가 전달되게 함 */
+  // 교체 시점(cut) 이전에 마지막으로 바뀐 항목은 삭제로 간주 → 교체를 모르는 기기의 옛 데이터가 되살아나지 않음
+  function applyCut() {
+    const c = data.cut || 0; let n = 0;
+    if (!c) return 0;
+    data.decks.concat(data.words).forEach(x => { if (!x.d && (x.u || 0) < c) { x.d = c; x.u = c; n++; } });
+    return n;
+  }
+
+  function replaceFrom(d) {
+    const t = now();
+    data.cut = t;
+    const keepD = new Set(alive(d.decks || []).map(x => x.id)), keepW = new Set(alive(d.words).map(x => x.id));
+    data.decks.forEach(x => { if (!x.d && !keepD.has(x.id)) { x.d = t; x.u = t; } });
+    data.words.forEach(x => { if (!x.d && !keepW.has(x.id)) { x.d = t; x.u = t; } });
+    const put = (arr, x) => {
+      const o = Object.assign({}, x, { u: t }); delete o.d;
+      const i = arr.findIndex(y => y.id === o.id);
+      if (i >= 0) arr[i] = o; else arr.push(o);
+    };
+    alive(d.decks || []).forEach(x => put(data.decks, x));
+    alive(d.words).forEach(x => put(data.words, Object.assign({ c: t }, x)));
+    save();
+  }
 
   /* 파일 가져오기 (중복 없이 병합)
      - 같은 id: 최신(u) 우선 / 같은 이름 덱: 기존 덱으로 합침 / 같은 영단어(대소문자·공백 무시): 건너뜀 */
@@ -226,6 +253,6 @@ const Store = (() => {
     decks, deck, saveDeck, delDeck,
     allWords, word, saveWord, delWord, setStatus, countOf, findByEn, norm,
     query, shuffle, set, get settings() { return data.settings; },
-    raw, merge, replaceAll, importMerge, snapKeys, restore
+    raw, merge, replaceAll, replaceFrom, importMerge, snapKeys, restore
   };
 })();

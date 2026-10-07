@@ -10,7 +10,6 @@
 <meta name="theme-color" content="#141416" media="(prefers-color-scheme: dark)">
 <link rel="apple-touch-icon" href="icon.png">
 <title>WORDS</title>
-<link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
@@ -26,14 +25,28 @@
 <div id="sheet-root"></div>
 <div id="toast-root"></div>
 
-<script src="store.js"></script>
-<script src="ui.js"></script>
-<script src="sync.js"></script>
-<script src="app.js"></script>
-<script src="view-words.js"></script>
-<script src="view-study.js"></script>
-<script src="view-decks.js"></script>
-<script src="view-settings.js"></script>
-<script>App.start();</script>
+<!-- loader: version.txt의 번호를 ?v=로 붙여 모든 파일을 함께 갱신 (배포 시 version.txt만 올리면 됨) -->
+<script>
+(function () {
+  var FILES = ['store.js', 'ui.js', 'sync.js', 'app.js', 'view-words.js', 'view-study.js', 'view-decks.js', 'view-settings.js'];
+  var KEY = 'vocab.build';
+  function saved() { try { return localStorage.getItem(KEY) || '0'; } catch (e) { return '0'; } }
+  function go(v) {
+    window.BUILD = v;
+    try { localStorage.setItem(KEY, v); } catch (e) {}
+    var l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'styles.css?v=' + v;
+    document.head.appendChild(l);
+    FILES.forEach(function (f, i) {
+      var s = document.createElement('script'); s.src = f + '?v=' + v; s.async = false;
+      if (i === FILES.length - 1) s.onload = function () { App.start(); };
+      document.body.appendChild(s);
+    });
+  }
+  fetch('version.txt?t=' + Date.now(), { cache: 'no-store' })
+    .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
+    .then(function (t) { go(t.trim() || saved()); }, function () { go(saved()); });
+})();
+</script>
+<!-- /loader -->
 </body>
 </html>
