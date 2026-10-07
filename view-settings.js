@@ -36,7 +36,7 @@
           sync.js ${(typeof Sync !== 'undefined' && Sync.VERSION) || '구버전 ⚠'} ·
           app.js ${(typeof App !== 'undefined' && App.VERSION) || '구버전 ⚠'} ·
           store v${Store.raw().v}
-          ${(typeof Sync === 'undefined' || Sync.VERSION !== 4 || typeof App === 'undefined' || App.VERSION !== 3)
+          ${(typeof Sync === 'undefined' || Sync.VERSION !== 5 || typeof App === 'undefined' || App.VERSION !== 3)
             ? '<div style="color:#a97b7b;margin-top:4px">파일이 최신이 아닙니다. sync.js · app.js · view-settings.js를 다시 올리고 새로고침하세요.</div>' : ''}
           <div data-log style="margin-top:4px;word-break:break-all"></div>
         </div>

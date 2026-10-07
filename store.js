@@ -179,6 +179,13 @@ const Store = (() => {
       if (data.settings.deck === d.id) data.settings.deck = keep[k].id;
       d.d = t; d.u = t; n++;
     });
+    // 이미 통합(삭제)된 덱을 가리키는 단어가 다른 기기에서 들어오면 같은 이름의 덱으로 옮김
+    data.words.forEach(w => {
+      if (w.d || deck(w.deckId)) return;
+      const old = data.decks.find(x => x.id === w.deckId);
+      const k = old && old.name.trim().toLowerCase();
+      if (k && keep[k]) { w.deckId = keep[k].id; w.u = t; n++; }
+    });
     return n;
   }
   function purge() {
