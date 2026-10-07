@@ -42,7 +42,7 @@ const App = (() => {
     cur = localStorage.getItem('vocab.tab');
     if (!byId[cur]) cur = views[0].id;
     paint(true);
-    try { if (typeof Sync !== 'undefined' && Sync.watch) { Sync.watch(); Sync.boot(true); } } catch (e) { logErr(e); }
+    try { if (typeof Sync !== 'undefined' && Sync.watch) Sync.watch(); } catch (e) { logErr(e); }   // 수동 동기화: 시작 시 자동 가져오기 없음
     seed('601900', 'seed-601-900.js', 'SEED_601_900');
     seed('9011200', 'seed-901-1200.js', 'SEED_901_1200');
   }

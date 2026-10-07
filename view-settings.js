@@ -36,7 +36,7 @@
           sync.js ${(typeof Sync !== 'undefined' && Sync.VERSION) || '구버전 ⚠'} ·
           app.js ${(typeof App !== 'undefined' && App.VERSION) || '구버전 ⚠'} ·
           store v${Store.raw().v}
-          ${(typeof Sync === 'undefined' || Sync.VERSION !== 5 || typeof App === 'undefined' || App.VERSION !== 3)
+          ${(typeof Sync === 'undefined' || Sync.VERSION !== 6 || typeof App === 'undefined' || App.VERSION !== 3)
             ? '<div style="color:#a97b7b;margin-top:4px">파일이 최신이 아닙니다. sync.js · app.js · view-settings.js를 다시 올리고 새로고침하세요.</div>' : ''}
           <div data-log style="margin-top:4px;word-break:break-all"></div>
         </div>
@@ -46,8 +46,8 @@
         <button class="btn full dim" data-a="clearlog" style="margin-bottom:7px">오류 기록 지우기</button>
         <button class="btn full warn" data-a="reset">전체 초기화</button>
         <div class="tiny" style="margin-top:16px;line-height:1.7">
-          입력 즉시 기기에 저장되고, 연결된 경우 잠시 후 자동 업로드됩니다.<br>
-          앱을 다시 열거나 화면으로 돌아올 때 서버 변경분을 자동으로 가져옵니다.
+          입력 즉시 기기에 저장됩니다. 동기화는 자동으로 하지 않습니다.<br>
+          다른 기기와 맞추려면 '지금 동기화'를 누르세요 (가져와 병합한 뒤 업로드).
         </div>`;
 
       const snaps = Store.snapKeys();
